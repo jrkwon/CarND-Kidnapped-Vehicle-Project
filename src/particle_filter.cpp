@@ -34,7 +34,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
 	normal_distribution<double> dist_y(y, std[1]);
 	normal_distribution<double> dist_theta(theta, std[2]);
 
-	default_random_engine gen;
+	default_random_engine gen(time(0));
 	for (int i = 0; i < num_particles; i++)
 	{
 		Particle particle;
@@ -62,7 +62,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
 	normal_distribution<double> dist_y(0.0, std_pos[1]);
 	normal_distribution<double> dist_theta(0.0, std_pos[2]);
 
-	default_random_engine gen;
+	default_random_engine gen(time(0));
 
 	double yaw = yaw_rate * delta_t;
 	for (int i = 0; i < num_particles; i++)
@@ -164,6 +164,11 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 			}
 		}
 
+		if(predicted.size() == 0) {
+			// no landmarks within the sensor range. set the weight of this particle as zero
+			particles[i].weight = 0;
+			continue; // no need to continue to get a weight.
+		}
 		// 3. data association
 		dataAssociation(predicted, trans_observations);
 
@@ -188,14 +193,19 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 			particles[i].weight *= normalizer * gaussian_prob;
 		}
 		sum_weights += particles[i].weight;
-	}
 
-	// 5. normalize all weights
-	for (int i = 0; i < num_particles; i++)
-	{
-		particles[i].weight /= sum_weights;
 		weights[i] = particles[i].weight;
 	}
+
+	// removed - no need to normalize. std::discrete_distribution takes care of it. it properly resample weights 
+	// that are not normalized.
+	//
+	// // 5. normalize all weights
+	// for (int i = 0; i < num_particles; i++)
+	// {
+	// 	particles[i].weight /= sum_weights;
+	// 	weights[i] = particles[i].weight;
+	// }
 }
 
 void ParticleFilter::resample()
@@ -218,7 +228,9 @@ void ParticleFilter::resample()
 		new_particles.push_back(particles[index]);
 	}
 
-	particles = new_particles;
+	// avoid the deep copy of vector data by using move.
+	// particles = new_particles;
+	particles = std::move(new_particles);
 }
 
 Particle ParticleFilter::SetAssociations(Particle &particle, const std::vector<int> &associations,
